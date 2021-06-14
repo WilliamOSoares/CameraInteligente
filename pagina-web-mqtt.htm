@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE html
+	PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<style>
+	#messages {
+		background-color: yellow;
+		font-size: 3;
+		font-weight: bold;
+		line-height: 140%;
+	}
+
+	.margin {
+		padding: 10px;
+	}
+
+	#status {
+		background-color: yellow;
+		font-size: 4;
+		font-weight: bold;
+		line-height: 140%;
+	}
+
+	tr {
+		border: 1px solid gray;
+	}
+
+	.out {
+		background-color: gray;
+	}
+
+	/* Three image containers (use 25% for four, and 50% for two, etc) */
+	.column {
+		float: left;
+		width: 30%;
+		padding: 5px;
+		display: block;
+		margin-left: auto;
+		margin-right: auto;
+		margin: auto;
+	}
+
+	/* Clear floats after image containers*/
+	.row::after {
+		content: "";
+		clear: both;
+		display: table;
+	}
+
+	.linha {
+		background-color: black;
+		margin-top: 10px;
+		margin-bottom: 10px;
+		padding-bottom: 2px;
+	}
+
+</style>
+
+<head>
+	<title>Tomba City MQTT</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!--Importa a biblioteca PAHO -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js" type="text/javascript"></script>
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+	<script type="text/javascript">
+		var connected_flag = 0
+		var mqtt; //Variável da instância do cliente mqtt
+		var reconnectTimeout = 2000;
+		var host; //Variável do endereço do broker
+		var port; //Variável da porta do broker
+
+		/*Quando a conexão é perdida, exibe o status Desconectado e muda o texto no botão de conexão*/
+		function onConnectionLost() {
+			console.log("conexão perdida");
+			document.getElementById("status").innerHTML = "Desconectado";
+			connected_flag = 0;
+			document.getElementById("botao").textContent = "Conectar";
+		}
+
+		/*Quando não consegue se conectar, exibe o status*/
+		function onFailure(message) {
+			console.log("Falhou");
+			document.getElementById("status").innerHTML = "Falha na conexão - Tente novamente";
+			//setTimeout(MQTTconnect, reconnectTimeout);
+		}
+
+		/*Executada toda vez que uma mensagem chega*/
+		function onMessageArrived(r_message) {
+			console.log(r_message); //imprime no console do navegador a mensagem recebida
+
+			var topic = r_message.destinationName; //Separa o tópico em uma variável
+
+			//Verifica em qual tópico a mensagem chegou e, se for um tópico de câmera, exibe a imagem
+			if (topic == "cam/camera1") {
+				document.getElementById("imgCamera1").src = "data:image/jpg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(r_message.payloadBytes)));
+			}
+			else if (topic == "cam/camera2") {
+				document.getElementById("imgCamera2").src = "data:image/jpg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(r_message.payloadBytes)));
+			}
+			else if (topic == "cam/camera3") {
+				document.getElementById("imgCamera3").src = "data:image/jpg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(r_message.payloadBytes)));
+			}
+			//Caso seja o texto do log, instancia o texto e uma quebra de linha na página
+			else if (topic == "log/texto") {
+				console.log(r_message.payloadString)
+				var txt = document.createTextNode(r_message.payloadString);
+				document.getElementById('log').appendChild(txt);
+				var br = document.createElement("br"); //Quebra de linha
+				document.getElementById('log').appendChild(br);
+			}
+			//Caso seja a imagem do log, instancia a imagem na página
+			else if (topic == "log/imagem") {
+				var img = document.createElement("IMG");
+				img.src = "data:image/jpg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(r_message.payloadBytes)));
+				img.style.marginRight = "20px";
+				img.style.width = "190px";
+				img.style.height = "100px";
+				document.getElementById('log').appendChild(img);
+			}
+		}
+
+		function onConnected(recon, url) {
+			console.log(" in onConnected " + reconn);
+		}
+
+		function onConnect() {
+			document.getElementById("status").innerHTML = "Conectado";
+			document.getElementById("botao").textContent = "Desconectar";
+			connected_flag = 1
+			console.log("on Connect " + connected_flag);
+			// Assim que a conexão é feita, se inscreve nos tópicos.
+			mqtt.subscribe("cam/#");
+			mqtt.subscribe("log/#");
+		}
+
+		/*Função responsável pela conexão*/
+		function MQTTconnect() {
+			if (connected_flag == 1) { //Verifica se já está conectado
+				mqtt.disconnect(); //Se sim, desconecta
+			} else {
+				host = document.getElementById("broker").value; //Pega o endereço do broker do campo de texto
+				port = Number(document.getElementById("porta").value); //Pega a string da porta do campo de texto e transforma em número
+
+				document.getElementById("status").innerHTML = "Conectando a " + host + " na porta " + port; //Exibe o status de conectando
+				console.log("conectando a " + host + " " + port);
+				var cname = "web1"; //Define um identificador para o cliente no broker
+				mqtt = new Paho.MQTT.Client(host, port, clientId = cname); //Cria um novo cliente e coloca na variável mqtt
+				var options = { //Define opções para o cliente mqtt, como o nome de usuário e a senha necessárias para autenticação
+					userName: "pblredes",
+					password: "pblredes1234",
+					timeout: 3,
+					onSuccess: onConnect,
+					onFailure: onFailure,
+				};
+
+				mqtt.onConnectionLost = onConnectionLost;
+				mqtt.onMessageArrived = onMessageArrived;
+
+				mqtt.connect(options); //Se conecta ao broker
+				return false;
+			}
+
+		}
+
+		/*Envia os horários inicial e final */
+		function send_time() {
+			if (connected_flag == 0) { //Verifica se está conectado
+				out_msg = "<b>Não pode enviar pois não está conectado</b>"
+				console.log(out_msg);
+				document.getElementById("status").innerHTML = out_msg;
+				return false;
+			}
+
+			inicial = document.getElementById("horarioinicial").value; //Recebe o valor de horário inicial do campo de texto
+			final = document.getElementById("horariofinal").value; //Recebe o valor de horário final do campo de texto
+
+			console.log("value= " + inicial);
+			message1 = new Paho.MQTT.Message(inicial); //Cria uma nova mensagem com o horário inicial
+			message1.destinationName = "horario/inicial"; //Define o tópico no qual vai publicar
+
+			console.log("value= " + final);
+			message2 = new Paho.MQTT.Message(final); //Cria uma nova mensagem com o horário final
+			message2.destinationName = "horario/final"; //Define o tópico no qual vai publicar
+
+			//Envia os horários inicial e final nas mensagens 1 e 2, respectivamente.
+			mqtt.send(message1);
+			mqtt.send(message2);
+
+			return false;
+		}
+	</script>
+
+</head>
+
+<body class="margin">
+	<div>
+		<table>
+			<h1 style="font-family:'Times New Roman', Times, serif; text-align: center;">Central de Vigilância de Tomba
+				City</h1>
+			<h3>Informações do servidor</h3>
+			<tr>
+				<td>Endereço broker:</td>
+				<td><input id="broker" type="text" value="pblredes.ddns.net"></td>
+			</tr>
+			<tr>
+				<td>Porta:</td>
+				<td><input id="porta" type="text" value="9001"></td>
+			</tr>
+		</table>
+		<button style="margin-bottom: 10px;" onclick="MQTTconnect()" id="botao">Conectar</button>
+	</div>
+
+	<div id="status">Desconectado</div>
+
+	<div class="linha"></div>
+
+	<div>
+		<table>
+			<h3>Informe o horário de lockdown na cidade:</h3>
+			<tr>
+				<td>Horário Inicial:</td>
+				<td><input id="horarioinicial" type="text" value="14/06/2021 13:50:00"></td>
+			</tr>
+			<tr>
+				<td>Horário Final:</td>
+				<td><input id="horariofinal" type="text" value="14/06/2021 13:50:30"></td>
+			</tr>
+		</table>
+		<button style="margin-bottom: 10px; margin-top: 5px;" onclick="send_time()" id="enviar">Enviar</button>
+	</div>
+
+	<div class="linha"></div>
+
+	<div class="row">
+		<div class="column">
+			<figure>
+				<img id="imgCamera1" src="https://image.flaticon.com/icons/png/512/562/562801.png" style="width:100%" width="600px" height="300px">
+				<figcaption>Câmera 1</figcaption>
+			</figure>
+		</div>
+		<div class="column">
+			<figure>
+				<img id="imgCamera2" src="https://image.flaticon.com/icons/png/512/726/726277.png" style="width:100%" width="600px" height="300px">
+				<figcaption>Câmera 2</figcaption>
+			</figure>
+		</div>
+		<div class="column">
+			<figure>
+				<img id="imgCamera3" src="https://image.flaticon.com/icons/png/512/544/544484.png" style="width:100%" width="600px" height="300px">
+				<figcaption>Câmera 3</figcaption>
+			</figure>
+		</div>
+	</div>
+
+	<div class="linha"></div>
+
+	<div id="log">
+		<h3>Log:</h3>
+	</div>
+
+</body>
+
+</html>
